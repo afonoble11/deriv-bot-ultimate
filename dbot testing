@@ -1,0 +1,151 @@
+{
+  "name": "deriv-bot-ultimate",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-scripts": "5.0.1",
+    "chart.js": "^4.4.0",
+    "react-chartjs-2": "^5.2.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test"
+  }
+}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deriv Bot Ultimate</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#ff444f" />
+</head>
+<body>
+  <div id="root"></div>
+</body>
+</html>
+{
+  "name": "Deriv Bot Ultimate",
+  "short_name": "DerivBot",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ff444f",
+  "icons": [
+    { "src": "/icons/icon-152x152.png", "sizes": "152x152", "type": "image/png" },
+    { "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png" }
+  ]
+}
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App.jsx';
+import './index.css';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+import React, { useState, useEffect } from 'react';
+import Dashboard from './components/Dashboard.jsx';
+import TradeLog from './components/TradeLog.jsx';
+import StrategyPanel from './components/StrategyPanel.jsx';
+import { initDerivApi, subscribeToTrades, subscribeToBalance } from './services/derivApi.js';
+
+export default function App() {
+    const [account, setAccount] = useState({ balance: 0 });
+    const [trades, setTrades] = useState([]);
+
+    useEffect(() => {
+        initDerivApi({
+            token: 'YOUR_DERIV_API_TOKEN', // <-- Replace with your token
+            onBalance: balance => setAccount({ balance }),
+            onTrade: trade => setTrades(prev => [trade, ...prev])
+        });
+
+        subscribeToBalance();
+        subscribeToTrades();
+    }, []);
+
+    return (
+        <div className="app-container">
+            <h1>Deriv Bot Ultimate</h1>
+            <StrategyPanel account={account} />
+            <Dashboard account={account} trades={trades} />
+            <TradeLog trades={trades} />
+        </div>
+    );
+}
+body { font-family: Arial, sans-serif; margin: 20px; }
+h1 { color: #ff444f; }
+.dashboard, .trade-log, .strategy-panel { margin-bottom: 20px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
+input, select { margin-left: 10px; }
+button { margin-top: 10px; padding: 5px 10px; background: #ff444f; color: white; border: none; border-radius: 4px; cursor: pointer; }
+button:hover { background: #d3363a; }
+import React from 'react';
+import { Line } from 'react-chartjs-2';
+
+export default function Dashboard({ account, trades }) {
+    const data = {
+        labels: trades.map((t, i) => 'Trade ' + (i + 1)),
+        datasets: [{
+            label: 'P/L per Trade',
+            data: trades.map(t => t.profit ?? 0),
+            fill: false,
+            borderColor: 'red',
+            tension: 0.1
+        }]
+    };
+
+    return (
+        <div className="dashboard">
+            <h2>Account Balance: $ {account.balance}</h2>
+            <Line data={data} />
+        </div>
+    );
+}
+import React from 'react';
+
+export default function TradeLog({ trades }) {
+    return (
+        <div className="trade-log">
+            <h3>Trade History</h3>
+            <ul>
+                {trades.map((t, i) => (
+                    <li key={i}>
+                        {t.symbol} - {t.contract_type} - Lot: {t.amount ?? '-'} - P/L: {t.profit ?? 'Pending'}
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+import React, { useState } from 'react';
+import { startStrategyLoop, stopAllStrategies } from '../services/strategies.js';
+
+export default function StrategyPanel({ account }) {
+    const [assets, setAssets] = useState(['R_100','R_50']);
+    const [strategy, setStrategy] = useState('RSI');
+    const [running, setRunning] = useState(false);
+
+    const startBot = () => { startStrategyLoop(account, assets, strategy); setRunning(true); };
+    const stopBot = () => { stopAllStrategies(); setRunning(false); };
+
+    return (
+        <div className="strategy-panel">
+            <h3>Strategy Panel</h3>
+            <label>Assets (comma separated):
+                <input value={assets.join(',')} onChange={e => setAssets(e.target.value.split(','))} />
+            </label>
+            <label>Strategy:
+                <select value={strategy} onChange={e => setStrategy(e.target.value)}>
+                    <option value="RSI">RSI</option>
+                    <option value="EMA">EMA Crossover</option>
+                    <option value="MACD">MACD</option>
+                </select>
+            </label>
+            <button onClick={running ? stopBot : startBot}>{running ? 'Stop Bot' : 'Start Bot'}</button>
+        </div>
+    );
+}
